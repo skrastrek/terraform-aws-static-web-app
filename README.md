@@ -1,1 +1,1 @@
-# terraform-modules-aws-static-web-app
+# AWS Static Web App Terraform Module
