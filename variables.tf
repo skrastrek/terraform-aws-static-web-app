@@ -19,6 +19,27 @@ variable "default_root_object" {
   default = "index.html"
 }
 
+variable "www_redirect_enabled" {
+  type        = bool
+  default     = false
+  description = "Enable a 301 redirect from www.<domain_name> to <domain_name>. The ACM certificate must cover the www subdomain."
+
+  # CloudFront allows only one viewer-request trigger (function or Lambda@Edge) per
+  # cache behavior. The www redirect occupies that slot on every behavior, so it
+  # cannot coexist with any other viewer-request association.
+  validation {
+    condition = !var.www_redirect_enabled || !contains(flatten([
+      var.auth_default_cache_behaviour != null ? [var.auth_default_cache_behaviour.event_type] : [],
+      var.auth_ordered_cache_behaviours[*].event_type,
+      [for b in concat(var.s3_bucket_ordered_cache_behaviours, var.custom_ordered_cache_behaviours) : [
+        b.function_associations[*].event_type,
+        b.lambda_function_associations[*].event_type,
+      ]],
+    ]), "viewer-request")
+    error_message = "www_redirect_enabled cannot be combined with any viewer-request association (auth_default_cache_behaviour, auth_ordered_cache_behaviours, or any viewer-request function/Lambda@Edge in s3_bucket_/custom_ordered_cache_behaviours). CloudFront permits only one viewer-request trigger per cache behavior, which the www redirect occupies."
+  }
+}
+
 variable "spa_enabled" {
   type        = bool
   description = "Enable or disable SPA-specific features."
