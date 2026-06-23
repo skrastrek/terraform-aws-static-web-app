@@ -1,0 +1,19 @@
+function handler(event) {
+    var request = event.request;
+
+    if (request.headers.host.value !== "www.${domain_name}") {
+        return request;
+    }
+
+    var qs = Object.keys(request.querystring)
+        .map(function (key) { return key + "=" + request.querystring[key].value; })
+        .join("&");
+
+    return {
+        statusCode: 301,
+        statusDescription: "Moved Permanently",
+        headers: {
+            location: { value: "https://${domain_name}" + request.uri + (qs ? "?" + qs : "") }
+        }
+    };
+}

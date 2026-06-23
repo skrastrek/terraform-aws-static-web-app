@@ -26,6 +26,16 @@ resource "aws_cloudfront_origin_access_control" "this" {
   signing_protocol                  = "sigv4"
 }
 
+resource "aws_cloudfront_function" "www_redirect" {
+  count = var.www_redirect_enabled ? 1 : 0
+
+  name    = "${var.name_prefix}-www-redirect"
+  runtime = "cloudfront-js-2.0"
+  comment = "Redirect www.${var.domain_name} to ${var.domain_name}"
+  publish = true
+  code    = templatefile("${path.module}/resources/redirect-www.js.tftpl", { domain_name = var.domain_name })
+}
+
 resource "aws_cloudfront_distribution" "this" {
   comment = var.name_prefix
 
@@ -38,7 +48,7 @@ resource "aws_cloudfront_distribution" "this" {
 
   default_root_object = var.default_root_object
 
-  aliases = [var.domain_name]
+  aliases = var.www_redirect_enabled ? [var.domain_name, "www.${var.domain_name}"] : [var.domain_name]
 
   viewer_certificate {
     acm_certificate_arn      = var.acm_certificate_arn_us_east_1
@@ -104,6 +114,14 @@ resource "aws_cloudfront_distribution" "this" {
       origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer.id
       response_headers_policy_id = data.aws_cloudfront_response_headers_policy.security_headers.id
 
+      dynamic "function_association" {
+        for_each = var.www_redirect_enabled ? [1] : []
+        content {
+          event_type   = "viewer-request"
+          function_arn = aws_cloudfront_function.www_redirect[0].arn
+        }
+      }
+
       lambda_function_association {
         event_type   = ordered_cache_behavior.value.event_type
         lambda_arn   = ordered_cache_behavior.value.lambda_arn
@@ -126,6 +144,14 @@ resource "aws_cloudfront_distribution" "this" {
       viewer_protocol_policy = ordered_cache_behavior.value.viewer_protocol_policy
 
       cache_policy_id = ordered_cache_behavior.value.cache_policy_id
+
+      dynamic "function_association" {
+        for_each = var.www_redirect_enabled ? [1] : []
+        content {
+          event_type   = "viewer-request"
+          function_arn = aws_cloudfront_function.www_redirect[0].arn
+        }
+      }
 
       dynamic "function_association" {
         for_each = ordered_cache_behavior.value.function_associations
@@ -163,6 +189,14 @@ resource "aws_cloudfront_distribution" "this" {
       cache_policy_id            = ordered_cache_behavior.value.cache_policy_id
       origin_request_policy_id   = ordered_cache_behavior.value.origin_request_policy_id
       response_headers_policy_id = ordered_cache_behavior.value.response_headers_policy_id
+
+      dynamic "function_association" {
+        for_each = var.www_redirect_enabled ? [1] : []
+        content {
+          event_type   = "viewer-request"
+          function_arn = aws_cloudfront_function.www_redirect[0].arn
+        }
+      }
 
       dynamic "function_association" {
         for_each = ordered_cache_behavior.value.function_associations
@@ -205,6 +239,14 @@ resource "aws_cloudfront_distribution" "this" {
     viewer_protocol_policy = "redirect-to-https"
 
     cache_policy_id = data.aws_cloudfront_cache_policy.caching_optimized.id
+
+    dynamic "function_association" {
+      for_each = var.www_redirect_enabled ? [1] : []
+      content {
+        event_type   = "viewer-request"
+        function_arn = aws_cloudfront_function.www_redirect[0].arn
+      }
+    }
 
     dynamic "lambda_function_association" {
       for_each = var.auth_default_cache_behaviour != null ? [var.auth_default_cache_behaviour] : []
